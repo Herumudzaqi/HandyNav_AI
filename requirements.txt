@@ -1,0 +1,6 @@
+Flask
+opencv-python
+numpy
+pyautogui
+screen-brightness-control
+mediapipe
