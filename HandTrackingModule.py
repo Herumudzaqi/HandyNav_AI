@@ -70,7 +70,7 @@ class handDetector:
             self.lmList = currentLmList
 
         self.prevLmList = currentLmList
-
+#
         for _, cx, cy in self.lmList:
             xList.append(cx)
             yList.append(cy)

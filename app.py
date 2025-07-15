@@ -139,6 +139,6 @@ def video_feed():
 @app.route('/fps')
 def get_fps():
     return jsonify({'fps': int(latest_fps)})
-
+#
 if __name__ == '__main__':
     app.run(debug=True)
