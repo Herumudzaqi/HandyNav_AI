@@ -28,6 +28,12 @@
             overflow: hidden;
         }
 
+        .fps-box {
+            margin-top: 15px;
+            font-size: 18px;
+            color: #444;
+        }
+
         footer {
             margin-top: 40px;
             color: #666;
@@ -50,6 +56,21 @@
         <img src="/video_feed?cam=0" id="video" width="640" height="480">
     </div>
 
-    
+    <div class="fps-box">
+        <strong>FPS Saat Ini:</strong> <span id="fpsDisplay">0</span>
+    </div>
+
+    <script>
+        function updateFPS() {
+            fetch('/fps')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('fpsDisplay').innerText = data.fps;
+                })
+                .catch(err => console.error('Gagal ambil FPS:', err));
+        }
+
+        setInterval(updateFPS, 500); // Update setiap 0.5 detik
+    </script>
 </body>
 </html>

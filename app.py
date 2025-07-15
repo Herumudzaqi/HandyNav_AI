@@ -1,22 +1,26 @@
-from flask import Flask, render_template, Response, request
+# Import library yang dibutuhkan
+from flask import Flask, render_template, Response, request, jsonify
 import cv2
 import numpy as np
 import time
-import pyautogui
-import threading
-import screen_brightness_control as sbc
-import HandTrackingModule as htm
+import pyautogui  
+import threading  
+import screen_brightness_control as sbc  
+import HandTrackingModule as htm  
 
 app = Flask(__name__)
 
 wCam, hCam = 640, 480
-frameR = 20
+frameR = 20  
+
 wScr, hScr = pyautogui.size()
 
 detector = htm.handDetector(maxHands=1, smooth_factor=0.0)
-recording = False
-recorder_thread = None
-prev_brightness = 100  # nilai awal brightness global
+
+recording = False  
+recorder_thread = None  
+prev_brightness = 100  
+latest_fps = 0  
 
 def screen_record():
     global recording
@@ -32,39 +36,34 @@ def screen_record():
 def handle_gestures(fingers, lmList, img):
     global recording, recorder_thread, prev_brightness
 
-    x1, y1 = lmList[8][1:]  # jari telunjuk
+    x1, y1 = lmList[8][1:]
     x_scr = np.interp(x1, (frameR, wCam - frameR), (0, wScr))
     y_scr = np.interp(y1, (frameR, hCam - frameR), (0, hScr))
 
-    # Mode: None
     if fingers == [0, 0, 0, 0, 0]:
         return img
 
-    # Klik (0 1 1 0 0)
     elif fingers == [0, 1, 1, 0, 0]:
         length, _, _ = detector.findDistance(8, 12, img, draw=False)
         if length < 40:
             pyautogui.click()
             time.sleep(0.1)
 
-    # Mulai Rekam (0 1 1 1 1)
     elif fingers == [0, 1, 1, 1, 1] and not recording:
         recording = True
         recorder_thread = threading.Thread(target=screen_record, daemon=True)
         recorder_thread.start()
 
-    # Stop Rekam (0 1 1 1 0)
     elif fingers == [0, 1, 1, 1, 0] and recording:
         recording = False
         if recorder_thread and recorder_thread.is_alive():
             recorder_thread.join()
 
-    # Kontrol Brightness (1 1 0 0 0)
     elif fingers == [1, 1, 0, 0, 0]:
         try:
             length, _, _ = detector.findDistance(4, 8, img, draw=False)
-
             if length < 25:
+                
                 sbc.set_brightness(1)
                 prev_brightness = 1
                 cv2.putText(img, 'Brightness: MIN', (20, hCam - 20),
@@ -79,23 +78,31 @@ def handle_gestures(fingers, lmList, img):
         except Exception as e:
             print("Brightness error:", e)
 
-    # Gerak Kursor (1 1 1 1 1)
     if fingers == [1, 1, 1, 1, 1]:
         pyautogui.moveTo(x_scr, y_scr)
 
     return img
 
 def generate_frames(camera_index=0):
+    global latest_fps
+
     cap = cv2.VideoCapture(camera_index)
     cap.set(3, wCam)
     cap.set(4, hCam)
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     cap.set(cv2.CAP_PROP_FPS, 30)
 
+    prev_time = time.time()
+
     while True:
         success, img = cap.read()
         if not success:
             continue
+
+        curr_time = time.time()
+        fps = 1 / (curr_time - prev_time)
+        prev_time = curr_time
+        latest_fps = fps
 
         img = cv2.flip(img, 1)
         img = detector.findHands(img, draw=True)
@@ -110,7 +117,7 @@ def generate_frames(camera_index=0):
             cv2.putText(img, 'RECORDING', (wCam - 150, 47),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-        cv2.putText(img, f'FPS: {int(cap.get(cv2.CAP_PROP_FPS))}', (20, 50),
+        cv2.putText(img, f'FPS: {int(fps)}', (20, 50),
                     cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
 
         ret, buffer = cv2.imencode('.jpg', img)
@@ -128,6 +135,10 @@ def video_feed():
     cam_id = request.args.get('cam', default=0, type=int)
     return Response(generate_frames(camera_index=cam_id),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/fps')
+def get_fps():
+    return jsonify({'fps': int(latest_fps)})
 
 if __name__ == '__main__':
     app.run(debug=True)
